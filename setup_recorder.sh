@@ -111,6 +111,68 @@ enable_i2c_bus3_overlay() {
     grep -qF "$overlay" "$CONFIG_FILE"
 }
 
+find_videos_partition_uuid() {
+    local dev uuid fstype mountpoint
+
+    if [ -n "${VIDEOS_UUID:-}" ]; then
+        echo "$VIDEOS_UUID"
+        return 0
+    fi
+
+    while read -r dev fstype mountpoint; do
+        [ "$fstype" = "exfat" ] || continue
+        case "$mountpoint" in
+            /|/boot|/boot/firmware) continue ;;
+        esac
+        uuid=$(blkid -s UUID -o value "$dev" 2>/dev/null) || continue
+        [ -n "$uuid" ] || continue
+        echo "$uuid"
+        return 0
+    done < <(lsblk -nrpo NAME,FSTYPE,MOUNTPOINT 2>/dev/null)
+
+    while read -r dev; do
+        [ -n "$dev" ] || continue
+        uuid=$(blkid -s UUID -o value "$dev" 2>/dev/null) || continue
+        [ -n "$uuid" ] || continue
+        echo "$uuid"
+        return 0
+    done < <(blkid -t TYPE=exfat -o device 2>/dev/null)
+
+    return 1
+}
+
+create_videos_mount_point() {
+    mkdir -p /VIDEOS && [ -d /VIDEOS ]
+}
+
+configure_videos_fstab() {
+    local uuid entry
+
+    uuid=$(find_videos_partition_uuid) || {
+        echo "ERROR: No exfat partition found. Connect the /VIDEOS drive or set VIDEOS_UUID and re-run."
+        return 1
+    }
+
+    echo "Using partition UUID: $uuid"
+    entry="UUID=${uuid} /VIDEOS exfat defaults,nofail,uid=1000,gid=1000 0 0"
+
+    if grep -qE '[[:space:]]/VIDEOS[[:space:]]' /etc/fstab; then
+        sed -i "\|[[:space:]]/VIDEOS[[:space:]]|c\\${entry}" /etc/fstab
+        echo "Updated existing /VIDEOS entry in /etc/fstab"
+    else
+        echo "$entry" >> /etc/fstab
+        echo "Added /VIDEOS entry to /etc/fstab"
+    fi
+
+    grep -qF "UUID=${uuid}" /etc/fstab
+}
+
+mount_videos_partition() {
+    systemctl daemon-reload &&
+    mount -a &&
+    mountpoint -q /VIDEOS
+}
+
 create_video_directories() {
     mkdir -p /VIDEOS/recordings/video &&
     mkdir -p /VIDEOS/recordings/imu &&
@@ -191,6 +253,9 @@ print_checklist() {
 
 run_step "Update packages" apt update
 run_step "Install dependencies" install_dependencies
+run_step "Create /VIDEOS mount point" create_videos_mount_point
+run_step "Configure /VIDEOS in fstab" configure_videos_fstab
+run_step "Mount /VIDEOS partition" mount_videos_partition
 run_step "Arducam libcamera_dev" install_arducam_libcamera_dev
 run_step "Arducam libcamera_apps" install_arducam_libcamera_apps
 run_step "Set camera_auto_detect=0" set_existing_config_value "camera_auto_detect" "0"
@@ -225,6 +290,10 @@ echo ""
 echo "sudo systemctl start record.service"
 echo "sudo systemctl stop record.service"
 echo "sudo systemctl status record.service"
+echo ""
+echo "sudo systemctl daemon-reload"
+echo "sudo mount -a"
+echo "findmnt /VIDEOS"
 echo ""
 echo "i2cdetect -y 3"
 echo "rpicam-hello --list-cameras"
