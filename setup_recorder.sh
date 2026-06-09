@@ -6,11 +6,10 @@ echo "=== Updating packages ==="
 apt update
 
 echo "=== Installing dependencies ==="
-apt install -y 
-python3-smbus 
-i2c-tools 
-exfat-fuse 
-exfatprogs
+apt install -y python3-smbus 
+apt install -y i2c-tools 
+apt install -y exfat-fuse 
+apt install -y exfatprogs
 
 echo "=== Enabling I2C bus 3 overlay ==="
 
