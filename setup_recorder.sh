@@ -126,16 +126,36 @@ echo "=== Enabling service ==="
 systemctl enable record.service
 
 echo ""
+echo "=== Installing PiSugar power manager (interactive) ==="
+echo "When prompted, select PiSugar 3."
+PI_SUGAR_DIR="/tmp/pisugar-install"
+mkdir -p "$PI_SUGAR_DIR"
+wget -O "$PI_SUGAR_DIR/pisugar-power-manager.sh" https://cdn.pisugar.com/release/pisugar-power-manager.sh
+set +e
+bash "$PI_SUGAR_DIR/pisugar-power-manager.sh" -c release
+PISUGAR_EXIT=$?
+set -e
+if [ "$PISUGAR_EXIT" -ne 0 ]; then
+    echo "WARNING: PiSugar install exited with status $PISUGAR_EXIT — re-run manually (see commands below)"
+fi
+
+echo ""
 echo "======================================="
 echo "Setup complete."
 echo ""
-echo "Before recording verify:"
+echo "sudo reboot"
 echo ""
-echo "1. /VIDEOS partition is mounted"
-echo "2. MPU6050 appears on:"
-echo "   i2cdetect -y 3"
-echo "3. Camera works:"
-echo "   rpicam-hello --list-cameras"
+echo "/usr/local/bin/start_recording.sh"
+echo "/usr/local/bin/stop_recording.sh"
+echo "/usr/local/bin/safe_shutdown.sh"
 echo ""
-echo "Reboot required for I2C bus 3 overlay and camera driver."
+echo "sudo systemctl start record.service"
+echo "sudo systemctl stop record.service"
+echo "sudo systemctl status record.service"
+echo ""
+echo "i2cdetect -y 3"
+echo "rpicam-hello --list-cameras"
+echo ""
+echo "wget -O /tmp/pisugar-power-manager.sh https://cdn.pisugar.com/release/pisugar-power-manager.sh"
+echo "bash /tmp/pisugar-power-manager.sh -c release"
 echo "======================================="
